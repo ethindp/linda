@@ -835,8 +835,24 @@ def _focusedItemIn(container: Node) -> Node | None:
 
 def _hasSelectedChild(node: Node) -> bool:
 	c = client()
-	for child in c.children(node):
-		if {"selected", "showing"} <= c.states(child):
+	if "Selection" in c.interfaces(node):
+		# A menu shell knows its selected item: two round trips, where reading every item's states takes
+		# two for each item.
+		try:
+			if c.selectedCount(node) <= 0:
+				return False
+			child = c.selectedChild(node)
+			if child is not None:
+				return {"selected", "showing"} <= c.states(child)
+		except NodeGone:
+			pass
+	states = c.states(node)
+	if "manages-descendants" in states:
+		return False
+	# Each child is fetched only until one is found.
+	for index in range(min(c.childCount(node), _clientModule.CHILDREN_LIMIT)):
+		child = c.childAt(node, index)
+		if child is not None and {"selected", "showing"} <= c.states(child):
 			return True
 	return False
 

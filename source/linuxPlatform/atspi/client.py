@@ -475,12 +475,17 @@ class Client:
 		return [found for found in (self.node(match) for match in matches or []) if found is not None]
 
 	def _walkForState(self, node: Node, state: str, limit: int) -> Node | None:
-		stack = list(reversed(self.children(node)))
+		# Entries are a node, or a (parent, index) pair for a child not fetched yet.
+		stack: list[Node | tuple[Node, int]] = list(reversed(self.children(node)))
 		visited = 0
 		while stack and visited < limit:
 			current = stack.pop()
 			visited += 1
 			try:
+				if isinstance(current, tuple):
+					current = self.childAt(*current)
+					if current is None:
+						continue
 				states = self.states(current)
 			except AppHung:
 				raise
@@ -494,9 +499,9 @@ class Client:
 				continue
 			try:
 				count = min(self.childCount(current), CHILDREN_LIMIT)
-				stack.extend(
-					c for c in (self.childAt(current, i) for i in reversed(range(count))) if c is not None
-				)
+				# Each child is fetched only when the walk reaches it: the match is usually found long
+				# before the last of a parent's children, each of which costs a round trip.
+				stack.extend((current, i) for i in reversed(range(count)))
 			except AppHung:
 				raise
 			except NodeGone:
