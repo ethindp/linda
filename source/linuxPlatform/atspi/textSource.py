@@ -41,6 +41,29 @@ def unitFor(toolkit: str | None) -> Unit:
 	return "codepoints"
 
 
+#: For each accessible whose application said its text changed, how many times it has said so. Text read
+#: and kept for a while is kept with the count it was read at, and is stale once the count moves on.
+_textGenerations: dict[tuple[str, str], int] = {}
+#: Accessibles counted at most, after which the counts start again; a count that restarts only makes
+#: kept text stale early, as every kept text is checked for equality with the count, not order.
+TEXT_GENERATIONS_KEPT = 4096
+_generationEpoch = 0
+
+
+def noteTextChanged(node: Node) -> None:
+	"""Record that node's application said node's text changed. Called as the event arrives."""
+	global _generationEpoch
+	if len(_textGenerations) >= TEXT_GENERATIONS_KEPT:
+		_textGenerations.clear()
+		_generationEpoch += 1
+	_textGenerations[node.key] = _textGenerations.get(node.key, 0) + 1
+
+
+def textGeneration(node: Node) -> tuple[int, int]:
+	"""A token that changes whenever node's text is said to have changed."""
+	return (_generationEpoch, _textGenerations.get(node.key, 0))
+
+
 def _call(node: Node, func, *args):
 	call = getattr(atspiClient, "call", None)
 	if call is not None:

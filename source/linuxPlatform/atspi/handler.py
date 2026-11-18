@@ -22,6 +22,7 @@ from logHandler import log
 
 from . import client as _clientModule
 from . import liveRegions
+from . import textSource as _textSourceModule
 from .client import ROOT_PATH, AppHung, Client, Node, NodeGone
 
 #: The events registered with the registry. Registration filters nothing in at-spi2-core 2.62, so the
@@ -492,6 +493,9 @@ def _onEvent(eventType: str, source: Node | None, detail1: int, detail2: int, an
 		if state not in STATE_CHANGE_STATES and state not in ("focused", "showing", "active"):
 			return
 	elif eventType.startswith("object:text-changed:"):
+		# Text kept for this core cycle is stale from here on, even for code that reads it again before
+		# this event is handled.
+		_textSourceModule.noteTextChanged(source)
 		# Qt sends what is typed into a password field in clear.
 		if _isPasswordText(source):
 			anyData = None

@@ -11,7 +11,7 @@ import textInfos
 import textUtils
 from colors import RGB
 from linuxPlatform.atspi.client import NodeGone
-from linuxPlatform.atspi.textSource import TextSource, toolkitOf, unitFor
+from linuxPlatform.atspi.textSource import TextSource, textGeneration, toolkitOf, unitFor
 from locationHelper import RectLTWH
 from logHandler import log
 from textInfos.offsets import OffsetsTextInfo, findEndOfLine, findStartOfLine
@@ -97,6 +97,10 @@ def formatField(attributes: dict[str, str], defaultLanguage: str | None = None) 
 	return field
 
 
+#: The key of an object's whole text among its cached properties.
+_STORY_TEXT_KEY = object()
+
+
 class AtspiTextInfo(OffsetsTextInfo):
 	"""Text through the AT-SPI Text interface of obj, which has node, toolkit and isProtected.
 
@@ -137,14 +141,39 @@ class AtspiTextInfo(OffsetsTextInfo):
 		return length
 
 	def _getStoryText(self) -> str:
-		try:
-			return self._shown(self.textSource.text(0, -1))
-		except NodeGone:
-			return ""
+		# Moving or expanding by sentence or paragraph reads the whole text each time, and say all does
+		# so for every sentence. The text is kept with the object for the core cycle, as NVDA keeps its
+		# properties, and dropped as soon as the application says it changed. The key is a fresh
+		# object, so that nothing else's cached property can meet it.
+		text = self.__dict__.get("storyTextCache")
+		if text is not None:
+			return text
+		source = self.textSource
+		cache = getattr(self.obj, "_propertyCache", None)
+		key = (_STORY_TEXT_KEY, source.unit, textGeneration(source.node))
+		if cache is not None:
+			text = cache.get(key)
+		if text is None:
+			try:
+				text = self._shown(source.text(0, -1))
+			except NodeGone:
+				return ""
+			if cache is not None:
+				for stale in [k for k in cache if isinstance(k, tuple) and k and k[0] is _STORY_TEXT_KEY]:
+					del cache[stale]
+				cache[key] = text
+		self.storyTextCache = text
+		return text
 
 	def _getTextRange(self, start: int, end: int) -> str:
 		if start >= end:
 			return ""
+		story = self.__dict__.get("storyTextCache")
+		if story is not None:
+			if self.encoding is None:
+				return story[start:end]
+			strStart, strEnd = textUtils.WideStringOffsetConverter(story).encodedToStrOffsets(start, end)
+			return story[strStart:strEnd]
 		line = self.__dict__.get("lineCache")
 		if line and line[0] <= start and end <= line[1]:
 			lineStart, _lineEnd, lineText = line
