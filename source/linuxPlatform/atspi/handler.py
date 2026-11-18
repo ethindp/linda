@@ -1114,6 +1114,9 @@ def pumpAll() -> None:
 	# Active descendants are remembered whatever else happens to the events.
 	for eventType, source, _d1, _d2, anyData in events:
 		if eventType == "object:active-descendant-changed" and isinstance(anyData, Node):
+			# Each one holds libatspi's proxy alive; pages make and drop containers all session long.
+			if len(_activeDescendants) >= MAX_QUEUED and source.key not in _activeDescendants:
+				_activeDescendants.clear()
 			_activeDescendants[source.key] = anyData
 		elif eventType == "object:property-change:accessible-role":
 			liveObjects.pop(source.key, None)
