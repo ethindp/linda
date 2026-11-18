@@ -83,7 +83,7 @@ def readStopped(tmp_path: Path, desktop: DesktopSession, env: dict[str, str] | N
 
 
 def test_factsReadOnceAreAnsweredWithoutTheApplication(tmp_path, desktop):
-	value = readStopped(tmp_path, desktop, env={"LINDA_ATSPI_CACHE": "1"})
+	value = readStopped(tmp_path, desktop)
 	assert value["caching"] is True
 	assert value["same"] is True, value
 	# Six objects, four facts each: asked of the stopped application, the first would already wait
@@ -92,8 +92,8 @@ def test_factsReadOnceAreAnsweredWithoutTheApplication(tmp_path, desktop):
 	assert value["statesAnswered"] is False, value
 
 
-def test_cacheIsOffUnlessAskedFor(tmp_path, desktop):
-	value = readStopped(tmp_path, desktop)
+def test_cacheCanBeTurnedOff(tmp_path, desktop):
+	value = readStopped(tmp_path, desktop, env={"LINDA_ATSPI_CACHE": "0"})
 	assert value["caching"] is False
 	assert value["same"] is False, value
 	# The first read waits out libatspi's 300 ms deadline, less what timing jitter takes.

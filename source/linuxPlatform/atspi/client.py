@@ -232,13 +232,12 @@ def _enableCache() -> bool:
 	a cache mask is libatspi's own way of saying the client keeps its events flowing. The mask is set
 	on the desktop, whose mask every application without its own uses.
 
-	It is off unless LINDA_ATSPI_CACHE=1, until NVDA forgets what toolkits change without saying so:
-	with it on, a Pluma tab keeps its name from before its file was changed, and Caja's list view, once
-	switched to, has its focused file go unannounced.
+	LINDA_ATSPI_CACHE=0 turns it off, for finding out whether something an application changes without
+	saying so is what makes NVDA present it stale.
 	"""
 	import os
 
-	if os.environ.get("LINDA_ATSPI_CACHE", "0") != "1":
+	if os.environ.get("LINDA_ATSPI_CACHE", "1") == "0":
 		return False
 	desktop = Atspi.get_desktop(0)
 	if desktop is None:
