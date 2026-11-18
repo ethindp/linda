@@ -199,19 +199,24 @@ def forgetApplications() -> None:
 
 _toolkits: dict[str, str] = {}
 
-#: What libatspi may answer from memory once it has read it, each kept current by the PropertyChange
-#: events libatspi always listens for. Applications built on atk-bridge send an event only if some
-#: client registered for it, so CACHE_EVENT_TYPES must be among the events listened to.
-#: States are left out: toolkits do not announce every change of them, Firefox's frame losing and
-#: regaining active as a dialog over it closes, and a background tab's document leaving showing, among
-#: them, and NVDA decides which window is active and which page is in front by reading them. Children
-#: are left out too: libatspi learns them only from the application's cache, and keeps them only
-#: through children-changed, which NVDA does not ask for, as a page sends thousands while it loads.
+#: What libatspi may answer from memory once it has read it, each kept current by an event libatspi
+#: always listens for: StateChanged for the states, PropertyChange for the rest. Applications built
+#: on atk-bridge send an event only if some client registered for it, so CACHE_EVENT_TYPES must be
+#: among the events listened to.
+#: States have to be among them. libatspi fills its cache from each application's GetItems, whose
+#: reply it can take inside the dispatch of another call, NVDA's call to its own process among them;
+#: for every object in it libatspi asks whether it manages its descendants, and with states left out
+#: of the mask that question is a call of its own, which libdbus cannot dispatch inside a dispatch, and
+#: NVDA's main thread waits for ever. The states toolkits do not announce every change of, a frame's
+#: active and a document's showing, are read with states(node, fresh=True).
+#: Children are left out: libatspi learns them only from the application's cache, and keeps them
+#: only through children-changed, which NVDA does not ask for, as a page sends thousands while it loads.
 CACHE_MASK = (
 	Atspi.Cache.NAME
 	| Atspi.Cache.DESCRIPTION
 	| Atspi.Cache.ROLE
 	| Atspi.Cache.PARENT
+	| Atspi.Cache.STATES
 	| Atspi.Cache.INTERFACES
 )
 #: The events that keep CACHE_MASK's facts current, besides those NVDA presents.
@@ -227,8 +232,9 @@ def _enableCache() -> bool:
 	a cache mask is libatspi's own way of saying the client keeps its events flowing. The mask is set
 	on the desktop, whose mask every application without its own uses.
 
-	It is off unless LINDA_ATSPI_CACHE=1: with it on, NVDA's start stalls after the mouse handler, in
-	the rig's sessions, until that is found and fixed.
+	It is off unless LINDA_ATSPI_CACHE=1, until NVDA forgets what toolkits change without saying so:
+	with it on, a Pluma tab keeps its name from before its file was changed, and Caja's list view, once
+	switched to, has its focused file go unannounced.
 	"""
 	import os
 
@@ -351,7 +357,20 @@ class Client:
 	def description(self, node: Node) -> str:
 		return call(node, Atspi.Accessible.get_description) or ""
 
-	def states(self, node: Node) -> frozenset[str]:
+	def forget(self, node: Node) -> None:
+		"""Have libatspi ask the application again for everything it keeps of node."""
+		if self.caching:
+			Atspi.Accessible.clear_cache_single(node.ref)
+
+	def states(self, node: Node, fresh: bool = False) -> frozenset[str]:
+		"""node's states, from libatspi's cache where it keeps them.
+
+		:param fresh: Ask the application, for a state toolkits change without saying so: a frame's
+			active, a document's showing. libatspi can forget only all it knows of one object at once, so
+			the object's name and role are asked again too, the next time they are read.
+		"""
+		if fresh:
+			self.forget(node)
 		stateSet = call(node, Atspi.Accessible.get_state_set)
 		return frozenset(s.value_nick for s in stateSet.get_states())
 

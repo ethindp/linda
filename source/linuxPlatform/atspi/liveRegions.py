@@ -96,7 +96,7 @@ def _isInForegroundPage(node: Node) -> bool:
 	documents = [a for a in ancestors if _isDocumentNode(a)]
 	if not documents:
 		return False
-	return "showing" in c.states(documents[-1])
+	return "showing" in c.states(documents[-1], fresh=True)
 
 
 def _isWeb(node: Node) -> bool:

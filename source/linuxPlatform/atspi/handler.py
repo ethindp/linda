@@ -179,7 +179,7 @@ def _focusDesktop() -> None:
 	node = getattr(focus, "node", None)
 	try:
 		top = _topLevelOf(node) if node is not None else None
-		if top is not None and "active" in client().states(top):
+		if top is not None and "active" in client().states(top, fresh=True):
 			return
 	except NodeGone:
 		pass
@@ -259,7 +259,7 @@ def _scanForActiveWindow() -> Node | None:
 	for app in applications():
 		try:
 			for window in c.children(app):
-				if "active" in c.states(window):
+				if "active" in c.states(window, fresh=True):
 					return window
 		except NodeGone:
 			continue
@@ -307,7 +307,7 @@ def _ownsActiveWindow(node: Node) -> bool:
 	if _foreground is not None and _foregroundActive and _foreground.busName == node.busName:
 		return True
 	top = _topLevelOf(node)
-	if top is None or "active" not in client().states(top):
+	if top is None or "active" not in client().states(top, fresh=True):
 		return False
 	_setForeground(top)
 	return True
@@ -494,6 +494,17 @@ def _onEvent(eventType: str, source: Node | None, detail1: int, detail2: int, an
 		# kept for _asWindowEvent.
 		if state not in STATE_CHANGE_STATES and state not in ("focused", "showing", "active"):
 			return
+		# What NVDA presents next is read from libatspi's cache, and toolkits change more with a state
+		# than they announce: GTK renames a notebook tab, its label marked when the document is modified,
+		# without a name change, and selects it saying only that. Forgetting the object costs nothing
+		# until it is read, and then one round trip for each fact.
+		client().forget(source)
+	elif eventType == "object:active-descendant-changed":
+		# GTK's tree views hand out a cell's accessible for a row other than the one it was made for,
+		# as when Caja's list view takes the place of its icon view, with no event for what it now shows.
+		client().forget(source)
+		if isinstance(anyData, Node):
+			client().forget(anyData)
 	elif eventType.startswith("object:text-changed:"):
 		# Text kept for this core cycle is stale from here on, even for code that reads it again before
 		# this event is handled.
@@ -509,6 +520,9 @@ def _onEvent(eventType: str, source: Node | None, detail1: int, detail2: int, an
 		_names[source.key] = anyData
 	elif eventType in WINDOW_ACTIVATION_EVENTS:
 		global _lastWindowEventAt, _settleStartedAt
+		# A window says it was activated without saying its active state changed, so libatspi would go
+		# on answering the one it had.
+		client().forget(source)
 		_lastWindowEventAt = now
 		if _settleStartedAt is None:
 			_settleStartedAt = now

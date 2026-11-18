@@ -38,12 +38,10 @@ nodes = [window, *c.children(window)][:6]
 
 
 def facts():
-	return [(c.role(n), c.name(n), c.description(n)) for n in nodes]
+	return [(c.role(n), c.name(n), c.description(n), sorted(c.states(n))) for n in nodes]
 
 
 before = facts()
-for n in nodes:
-	c.states(n)
 os.kill({pid}, signal.SIGSTOP)
 try:
 	started = time.monotonic()
@@ -52,9 +50,9 @@ try:
 	except atspiClient.NodeGone as e:
 		after = repr(e)
 	seconds = time.monotonic() - started
-	# States are always asked of the application, which does not answer while it is stopped.
+	# A fresh read asks the application, which does not answer while it is stopped.
 	try:
-		c.states(nodes[0])
+		c.states(nodes[0], fresh=True)
 		statesAnswered = True
 	except atspiClient.NodeGone:
 		statesAnswered = False
@@ -88,7 +86,7 @@ def test_factsReadOnceAreAnsweredWithoutTheApplication(tmp_path, desktop):
 	value = readStopped(tmp_path, desktop, env={"LINDA_ATSPI_CACHE": "1"})
 	assert value["caching"] is True
 	assert value["same"] is True, value
-	# Six objects, three facts each: asked of the stopped application, the first would already wait
+	# Six objects, four facts each: asked of the stopped application, the first would already wait
 	# out libatspi's 300 ms deadline.
 	assert value["seconds"] < 0.1, value
 	assert value["statesAnswered"] is False, value
