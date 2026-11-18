@@ -1373,20 +1373,42 @@ class TableCell(AtSpi):
 		table = self.table
 		return table.node.key if table else None
 
+	# Speech and braille take NotImplementedError from a table property as "not known" and present
+	# the rest; a cell or table that is gone, or a busy application, must say the same rather than
+	# leave the focus unannounced.
+
+	def _cellPosition(self) -> tuple[int, int]:
+		try:
+			return _client().cellPosition(self.node)
+		except NodeGone:
+			raise NotImplementedError from None
+
+	def _tableSize(self) -> tuple[int, int]:
+		table = self.table
+		if table is None:
+			raise NotImplementedError
+		try:
+			return _client().tableSize(table.node)
+		except NodeGone:
+			raise NotImplementedError from None
+
 	def _get_rowNumber(self) -> int:
-		return _client().cellPosition(self.node)[0] + 1
+		return self._cellPosition()[0] + 1
 
 	def _get_columnNumber(self) -> int:
-		return _client().cellPosition(self.node)[1] + 1
+		return self._cellPosition()[1] + 1
 
 	def _get_rowCount(self) -> int:
-		return _client().tableSize(self.table.node)[0]
+		return self._tableSize()[0]
 
 	def _get_columnCount(self) -> int:
-		return _client().tableSize(self.table.node)[1]
+		return self._tableSize()[1]
 
 	def _get_columnHeaderText(self) -> str:
-		return " ".join(h for h in _client().columnHeaderNames(self.node) if h)
+		try:
+			return " ".join(h for h in _client().columnHeaderNames(self.node) if h)
+		except NodeGone:
+			raise NotImplementedError from None
 
 
 class Desktop(AtSpi):
