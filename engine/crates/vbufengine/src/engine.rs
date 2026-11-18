@@ -678,6 +678,12 @@ async fn render_task(
     walk.start(&root, Vec::new());
     let mut first_sent = false;
     while walk.step().await {
+        if d.p.borrow().unwatched {
+            // Rendered again or no longer wanted: what was walked so far still answers the request,
+            // whose buffer is thrown away, and the application is asked nothing more for it.
+            info.insert("cancelled".into(), true.into());
+            break;
+        }
         if progressive
             && !first_sent
             && (walk.complete >= FIRST_PART_OBJECTS
@@ -871,7 +877,13 @@ async fn update_task(st: Rc<State>, d: Rc<Doc>) {
         for t in &targets {
             walk.start(t, Vec::new());
         }
-        while walk.step().await {}
+        // A document that is unwatched or rendered again meanwhile has no use for this walk: stopping
+        // at once leaves the application's main thread to the walk that replaced it.
+        while walk.step().await {
+            if d.p.borrow().unwatched || !st.is_current(&d) {
+                break;
+            }
+        }
         if d.p.borrow().unwatched || !st.is_current(&d) {
             end_update(&st, &d);
             return;
