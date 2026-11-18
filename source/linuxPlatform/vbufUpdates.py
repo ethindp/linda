@@ -25,19 +25,24 @@ if TYPE_CHECKING:
 
 #: Milliseconds each wait for a batch may take, which bounds how long the thread takes to stop.
 WAIT_MS = 500
-#: Seconds the rest of a large page, and the end of a document's load, are kept for a buffer not yet
-#: registered. Either can come before the thread that rendered the document has built the buffer
-#: and registered it; the rest replaces the whole document, so nothing older than it is lost by
-#: applying it late, and the end of the load is what the buffer waits for before reading a page
-#: that was still loading. Other batches for a document no buffer has are dropped: the buffer's own
-#: render is newer than they are.
+#: Seconds a batch is kept for a buffer not yet registered. Batches can come before the thread that
+#: rendered the document has built the buffer and registered it: the rest of a large page, the end of
+#: a document's load, and the changes the engine saw while it walked the page, which it sends a moment
+#: after the render as updates to it. The render does not have those changes, and the engine counts
+#: them as sent, so every batch is kept and applied in order once the buffer registers.
 HOLD_SECONDS = 10.0
-#: The events that make a batch worth keeping for a buffer not yet registered.
-_HELD_EVENTS = ("complete", "loadComplete")
+#: Batches kept at most for one document not yet registered; past it the oldest go. A page that
+#: changes this often before its buffer exists is rendered again by the next change.
+HOLD_LIMIT = 256
 
 _buffers: dict[tuple[str, str], "AtSpiBuffer"] = {}
-#: The rest of each large page that came before its buffer registered, with when it came.
+#: The batches that came before their buffer registered, with when each came.
 _held: dict[tuple[str, str], list[tuple[float, object]]] = {}
+#: Documents whose buffer unregistered and which no render has asked for since. A batch for one of these
+#: is about a buffer that is gone, and would be wrong for the next buffer of that document.
+_closed: set[tuple[str, str]] = set()
+#: Closed documents remembered at most; one forgotten only lets its late batches be held, and expire.
+CLOSED_LIMIT = 1024
 #: Batches whose buffer registered after they came, for the thread to apply before it waits again.
 _ready: list[object] = []
 #: Storage handles holding a document's old fields, swapped out on the main thread, to free here.
@@ -53,6 +58,13 @@ def _engineNext():
 	"""The engine's next, or None for an engine that cannot watch documents."""
 	nextBatch = getattr(vbufEngine, "next", None)
 	return nextBatch if callable(nextBatch) else None
+
+
+def expect(busName: str, docPath: str) -> None:
+	"""Keep the batches for this document from now on, until its buffer registers. Call it before the
+	render that the buffer is built from."""
+	with _lock:
+		_closed.discard((busName, docPath))
 
 
 def register(buffer: "AtSpiBuffer") -> None:
@@ -75,6 +87,9 @@ def unregister(buffer: "AtSpiBuffer") -> None:
 		key = (buffer.busName, buffer.docPath)
 		if _buffers.get(key) is buffer:
 			del _buffers[key]
+			if len(_closed) >= CLOSED_LIMIT:
+				_closed.clear()
+			_closed.add(key)
 		for _came, batch in _held.pop(key, ()):
 			if batch.stream is not None:
 				_release(batch.stream)
@@ -118,6 +133,14 @@ def terminate() -> None:
 			log.debugWarning("The update thread is still waiting on the engine")
 	_thread = None
 	_freeSpent()
+	# Batches kept for buffers that never registered are not going to be applied now.
+	with _lock:
+		held = [batch for kept in _held.values() for _came, batch in kept] + _ready
+		_held.clear()
+		_ready.clear()
+	for batch in held:
+		if batch.stream is not None:
+			_release(batch.stream)
 
 
 def _release(stream, *, onMainThread: bool = False) -> None:
@@ -145,17 +168,24 @@ def _freeSpent() -> None:
 		vbufLib.destroy(handle)
 
 
+def _applyReady() -> None:
+	"""Apply the batches whose buffer registered after they came, oldest first. Called on this thread
+	before any batch newer than them, which a buffer registering while this thread holds one would
+	otherwise see applied first."""
+	with _lock:
+		ready = _ready[:]
+		_ready.clear()
+	for batch in ready:
+		try:
+			_apply(batch, hold=False)
+		except Exception:
+			log.exception("An update from the engine could not be applied")
+
+
 def _run(nextBatch) -> None:
 	while not _stop.is_set():
 		_freeSpent()
-		with _lock:
-			ready = _ready[:]
-			_ready.clear()
-		for batch in ready:
-			try:
-				_apply(batch, hold=False)
-			except Exception:
-				log.exception("An update from the engine could not be applied")
+		_applyReady()
 		try:
 			batch = nextBatch(WAIT_MS)
 		except Exception:
@@ -163,6 +193,7 @@ def _run(nextBatch) -> None:
 			return
 		if batch is None:
 			continue
+		_applyReady()
 		try:
 			_apply(batch)
 		except Exception:
@@ -190,12 +221,24 @@ def _apply(batch, *, hold: bool = True) -> None:
 		with _lock:
 			key = (batch.busName, batch.docPath)
 			buffer = _buffers.get(key)
+			if hold and _ready:
+				# A buffer registered since this thread took the batches waiting for it; this newer one
+				# goes after them.
+				_ready.append(batch)
+				kept = True
+				return
 			if buffer is None:
 				now = time.monotonic()
 				_dropExpiredHeld(now)
-				if hold and any(event in batch.events for event in _HELD_EVENTS):
-					_held.setdefault(key, []).append((now, batch))
-					kept = True
+				if not hold or key in _closed:
+					return
+				held = _held.setdefault(key, [])
+				held.append((now, batch))
+				kept = True
+				while len(held) > HOLD_LIMIT:
+					_came, oldest = held.pop(0)
+					if oldest.stream is not None:
+						_release(oldest.stream)
 				return
 		if batch.stream is not None and "complete" in batch.events:
 			# The rest of a large page, which replaces the whole document: built here, not on the main thread.

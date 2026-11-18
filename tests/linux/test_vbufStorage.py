@@ -852,7 +852,8 @@ def test_updateThreadAppliesThenTellsTheBuffer(tmp_path: Path, library: Path):
 		},
 		{"mainThread": True, "events": ["loadComplete"], "info": {}, "text": "Updated.HeadingLast."},
 	]
-	# The batch for a document no buffer holds is dropped, and its stream freed all the same.
+	# The batch for a document no buffer holds is kept for one that may yet register, and its stream
+	# freed once the thread stops.
 	assert value["leftOver"] == 0
 	assert value["freed"] == [True, True]
 	assert value["waits"] == [500]

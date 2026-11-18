@@ -285,6 +285,8 @@ class AtSpiBuffer(VirtualBuffer):
 		start = time.perf_counter()
 		handle = None
 		try:
+			if vbufUpdates is not None:
+				vbufUpdates.expect(busName, path)
 			rendered = vbufEngine.render(busName, path, docHandle, progressive=True)
 			renderedAt = time.perf_counter()
 			try:
