@@ -1147,57 +1147,69 @@ def pumpAll() -> None:
 				break
 		focusEvents.clear()
 
-	for index, event in enumerate(kept):
+	def handleOne(index: int, event) -> None:
 		eventType = event[0]
 		if eventType in WINDOW_ACTIVATION_EVENTS:
 			_trackWindow(event)
 		if _isBlur(event):
-			continue
+			return
 		if _isFocusEvent(event):
 			if index not in blurredAfter:
 				focusEvents.append(event)
-			continue
+			return
 		if not windowsChanged:
 			flushFocus()
+		# Before the live regions, which read the source's attributes: an event past its application's
+		# limit is dropped unread, as upstream's limiter drops an IAccessible2 event before NVDA sees it.
+		if index in overLimit:
+			return
 		# What these speak goes past eventHandler, where NVDA withholds the rest while locked.
 		withheld = _isWithheldWhileLocked(event[1])
 		if not withheld and liveRegions.handle(event):
-			continue
-		if index in overLimit:
-			continue
+			return
 		if eventType == ANNOUNCEMENT_EVENT:
 			if not withheld:
 				_announce(event)
-			continue
+			return
 		if event[1].key in blurred and eventType in (
 			"object:text-caret-moved",
 			"object:text-selection-changed",
 		):
-			continue
+			return
 		try:
 			nvdaEvents = _nvdaEvents(event)
 		except NodeGone:
-			continue
+			return
 		if not nvdaEvents:
-			continue
+			return
 		node = event[1]
 		if not _shouldAccept(nvdaEvents[0], node):
-			continue
+			return
 		try:
 			obj = eventObject(node)
 		except NodeGone:
-			continue
+			return
 		if obj is None:
-			continue
+			return
 		if nvdaEvents == ["alert"]:
 			# A notification is created and shown at once; it is announced once.
 			if node.key in alerted:
-				continue
+				return
 			alerted.add(node.key)
 		for nvdaEvent in nvdaEvents:
 			eventHandler.queueEvent(nvdaEvent, obj)
 		if eventType.startswith("object:text-changed:"):
 			_reportTextChange(obj, event)
+
+	for index, event in enumerate(kept):
+		# The batch is already taken from the queue: an event that fails, in an overlay class, an app
+		# module or a live region, must not take the rest of it with it, focus changes included.
+		try:
+			handleOne(index, event)
+		except NodeGone:
+			pass
+		except Exception:
+			log.exception(f"AT-SPI pump: handling {event[0]} failed")
 	if windowsChanged and not _foregroundActive:
 		# A window deactivated and none activated after it: marco can give the focus back to a window
 		# without that window saying so, as when a dialog closes.

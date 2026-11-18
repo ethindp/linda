@@ -164,6 +164,10 @@ class _Gatherer:
 		if text is not None:
 			for index, character in enumerate(text):
 				if character == EMBEDDED and recurse:
+					if self.visited > TEXT_NODE_LIMIT:
+						# gather would return at once, after this loop had asked for the object and its
+						# attributes; past the limit, the rest of the embedded objects are left out.
+						continue
 					child = _linkedObject(node, start + index)
 					if child is not None:
 						if not _isOff(child):
