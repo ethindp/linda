@@ -113,6 +113,10 @@ tests.unit.test_mathPres.test_mathCatNavNodeMapping
   windll.user32.RegisterClipboardFormatW twice, which has no Linux implementation. The test
   imports mathPres.MathCAT._navNodeMapping, and the package imports MathCAT.py first.
   Import raises: ModuleNotFoundError: libmathcat_py
+tests.unit.test_mathPres.test_mathCatSpeech
+  Until libmathcat_py is packaged in the dev shell, as test_mathCatNavNodeMapping: the test
+  imports mathPres.MathCAT.speech, and the package imports MathCAT.py first.
+  Import raises: ModuleNotFoundError: libmathcat_py
 tests.unit.test_l10nUtil
   Until crowdin-api-client, l2m4m, markdown-link-attr-modifier and mdx-gh-links are packaged:
   l10nUtil is translators' tooling and imports crowdin_api at module level. Packaging them would

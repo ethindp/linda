@@ -86,6 +86,11 @@ class Context(_Context, Enum):
 		# Translators: Reported when an action cannot be performed because Remote Access functionality is disabled.
 		pgettext("remote", "Action unavailable when Remote Access is disabled"),
 	)
+	SECURE_SCREEN = (
+		isRunningOnSecureDesktop,
+		# Translators: Reported when an action cannot be performed because NVDA is in a secure screen
+		_("Action unavailable on secure screen"),
+	)
 
 
 def when(*contexts: Context):

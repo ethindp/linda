@@ -854,8 +854,11 @@ for layout in LAYOUTS:
 	for ch in "aA1!ąĄł;'[":
 		try:
 			lines.append(f"fromName {ch!r}: {keyboardHandler.KeyboardInputGesture.fromName(ch).identifiers[1]}")
-		except LookupError as e:
-			lines.append(f"fromName {ch!r}: {type(e).__name__}: {e}")
+		except (LookupError, ValueError) as e:
+			# Since NVDA's #20647, fromName raises ValueError for an unknown key name, from the
+			# LookupError that names the key; the recorded names keep the cause.
+			cause = e.__cause__ if isinstance(e, ValueError) and e.__cause__ is not None else e
+			lines.append(f"fromName {ch!r}: {type(cause).__name__}: {cause}")
 	result[layout] = lines
 """
 

@@ -237,6 +237,8 @@ source/addonStore/dataManager.py
   at start-up and getLatestCompatibleAddons and getLatestAddons return an
   empty listing without asking the server, so that nothing is sent to
   NV Access's server until the user turns the store on
+  every platform: carries NVDA master's commit a4a89720c (#20834), ahead of
+  the release that brings it; drop this once that release is merged
 source/addonStore/models/addon.py
   every platform: the store's models give platforms, from the manifest for
   installed add-ons and bundles; the store's listing says nothing of them,
@@ -385,6 +387,8 @@ source/browseMode.py
   Linux runtime: the elements list's tree passes on Tab and keys with Alt
   or Control, which wx on GTK hands it as characters to search for, so
   that they move between the dialog's controls as on Windows
+  every platform: carries NVDA master's commit 6442a179e (#20854), ahead of
+  the release that brings it; drop this once that release is merged
 source/buildVersion.py
   Linux runtime: name is Linda, the name NVDA has on Linux, so that the
   main window, the notification area icon and versionInfo say it
@@ -400,6 +404,8 @@ source/config/configSpec.py
   Linux runtime: addonStore has an enabled key, false by default, which
   turns NVDA's add-on store on; Windows has no such key and its store is
   always on
+  every platform: carries NVDA master's commit e1eef75ed (#21104), ahead of
+  the release that brings it; drop this once that release is merged
 source/config/registry.py
   every platform: winreg comes from linuxPlatform.windowsOnly, so
   _deleteKeyAndSubkeys raises NoLinuxImplementation on Linux
@@ -461,6 +467,9 @@ source/globalCommands.py
   says the platform lacks are replaced, before the instance is made, by
   ones bound to no gesture and listed nowhere, which say they are not
   available. Windows supports every feature, so none is replaced
+  every platform: carries NVDA master's commits 27a23ec4f (#21086),
+  324c44295 (#21158), 415cfb30d (#20952), e1eef75ed (#21104), ahead of the
+  release that brings them; drop this once that release is merged
 source/gui/__init__.py
   Linux runtime: MainFrame.prePopup and postPopup skip their foreground
   window steps. Windows' foreground window has no counterpart for NVDA to
@@ -506,6 +515,8 @@ source/gui/__init__.py
   every platform: IndeterminateProgressDialog.done hides and destroys the
   dialog even when deciding on or playing its beep fails, since the dialog
   is application modal and would otherwise disable every other window
+  every platform: carries NVDA master's commit 324c44295 (#21158), ahead of
+  the release that brings it; drop this once that release is merged
 source/gui/addonStoreGui/controls/details.py
   every platform: the details say whether an add-on supports the platform
   NVDA runs on, or which it was made for
@@ -534,6 +545,11 @@ source/gui/addonStoreGui/viewModels/store.py
   os.startfile on Windows and on Linux opens an add-on's home page, licence,
   source, reviews, scan results or help with the desktop's default
   application through xdg-open
+source/gui/blockAction.py
+  every platform: carries NVDA master's commit 324c44295 (#21158), its
+  SECURE_SCREEN context alone, without the removal of WINDOWS_STORE_VERSION
+  by bdc938888 beside it, ahead of the release that brings it; drop this
+  once that release is merged
 source/gui/contextHelp.py
   every platform: context help opens through startfile from
   linuxPlatform.windowsOnly, which is os.startfile on Windows and on Linux
@@ -548,6 +564,10 @@ source/gui/contextHelp.py
   file:/// before an absolute POSIX path gives four slashes. The redirect
   stays, because xdg-open hands a file URL to GIO, which refuses one with a
   fragment
+source/gui/inputGestures.py
+  every platform: carries NVDA master's commits aa34ce557 (#20890),
+  ea1f2e38a (#21058), ahead of the release that brings them; drop this once
+  that release is merged
 source/gui/logViewer.py
   Linux runtime: refresh goes through linuxPlatform.logView, so that the
   viewer holds at most the last megabyte of the log, in whole lines, as
@@ -592,6 +612,9 @@ source/gui/settingsDialogs.py
   and starts with the check box that turns the store on, which warns first
   through linuxPlatform.nvdaAddonStore; the category's other controls are
   disabled while the store is off
+  every platform: carries NVDA master's commits 25e8f0221 (#21105),
+  8ad96335c (#20910), d9b0488d9 (#20997), e1eef75ed (#21104), ahead of the
+  release that brings them; drop this once that release is merged
 source/gui/startupDialogs.py
   Linux runtime: the welcome dialog's "Start NVDA after I sign in" is
   enabled outside secure mode, installed copy or not, as an XDG autostart
@@ -641,6 +664,9 @@ source/keyboardHandler.py
   does not type its key twice. send() does not wait for the echo of the
   keys it sends, which the key source drops. The NVDA key in a gesture's
   description is named by keyLabels, which names it Linda on Linux
+  every platform: carries NVDA master's commit 09912baf4 (#20647), whose
+  single-character lookup still goes to linuxPlatform.inputHook on Linux,
+  ahead of the release that brings it; drop this once that release is merged
 source/keyLabels.py
   Linux runtime: the NVDA key has the label Linda, which input help and the
   input gestures dialog say, while gesture identifiers keep nvda. The keys
@@ -678,6 +704,10 @@ source/logHandler.py
 source/louisHelper.py
   import safety: os.add_dll_directory around the louis import only on
   Windows
+source/mathPres/MathCAT/speech.py
+  every platform: carries NVDA master's commits 6c981c640 (#21019),
+  7da11e834 (#20831), ahead of the release that brings them; drop this once
+  that release is merged
 source/mathPres/__init__.py
   every platform: initialize() imports MathCAT inside the try
   that already turns a MathCAT that cannot start into the warning "MathCAT
@@ -719,12 +749,22 @@ source/screenCurtain/_screenCurtain.py
   it found, in place of the Magnification API; enabling is tried once, as
   an X server either has ramps to set or does not, and enabled reads false
   once the curtain was lost, as when the X server closed its connection
+source/speech/extensions.py
+  every platform: carries NVDA master's commit 2ad0415cd (#20775), ahead of
+  the release that brings it; drop this once that release is merged
 source/speech/sayAll.py
   Linux runtime: a text reader whose first position cannot be made, as on
   an object without a caret, ends the request to keep the session awake
   that it made as it began, which stop never ends, since on Linux the
   request holds an idle inhibitor and the screen would never lock
   every platform: imports sys for that test of the platform
+source/speech/shortcutKeys.py
+  every platform: carries NVDA master's commit 7da11e834 (#20831), ahead of
+  the release that brings it; drop this once that release is merged
+source/speech/speech.py
+  every platform: carries NVDA master's commits 2ad0415cd (#20775),
+  7da11e834 (#20831), e1eef75ed (#21104), ahead of the release that brings
+  them; drop this once that release is merged
 source/synthDriverHandler.py
   Linux runtime: getSynthList skips NVDA's own copies of
   the Windows-only driver modules (mssp, oneCore, sapi4_32, sapi5,
@@ -757,6 +797,9 @@ source/synthDrivers/espeak.py
   next change of voice fails with KeyError, as availableVoices is keyed by
   the last component. No Windows identifier holds a slash, so Windows does
   as before. A fix to offer NVDA
+source/synthDrivers/oneCore.py
+  every platform: carries NVDA master's commit 7da11e834 (#20831), ahead of
+  the release that brings it; drop this once that release is merged
 source/systemUtils.py
   every platform: winreg comes from linuxPlatform.windowsOnly, which on
   Windows is the real module.
@@ -903,3 +946,20 @@ source/versionInfo.py
   linuxPlatform.branding, says Linda is based on NVDA by NV Access and is
   not affiliated with or endorsed by it, in place of upstream's, which says
   NV Access develops it
+tests/unit/test_browseModeFocusEntered.py
+  every platform: carries NVDA master's commit 6442a179e (#20854), ahead of
+  the release that brings it; drop this once that release is merged
+tests/unit/test_keyboardHandler.py
+  every platform: carries NVDA master's commit 09912baf4 (#20647), ahead of
+  the release that brings it; drop this once that release is merged
+tests/unit/test_mathPres/test_mathCatSpeech.py
+  every platform: carries NVDA master's commit 6c981c640 (#21019), ahead of
+  the release that brings it; drop this once that release is merged
+tests/unit/test_speech.py
+  every platform: carries NVDA master's commits 2ad0415cd (#20775),
+  e1eef75ed (#21104) without its own test changes, which assume a commit
+  between, ahead of the release that brings them; drop this once that
+  release is merged
+tests/unit/test_voiceSettingsPanel.py
+  every platform: carries NVDA master's commit d9b0488d9 (#20997), ahead of
+  the release that brings it; drop this once that release is merged

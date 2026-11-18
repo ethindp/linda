@@ -6,7 +6,7 @@
 # Łukasz Golonka, Aaron Cannon, Adriani90, André-Abush Clause, Dawid Pieper,
 # Takuya Nishimoto, jakubl7545, Tony Malykh, Rob Meredith,
 # Burman's Computer and Education Ltd, hwf1324, Cary-rowen, Christopher Proß, Tianze
-# Neil Soiffer, Ryan McCleary, Wang Chong, Kefas Lungu.
+# Neil Soiffer, Ryan McCleary, Wang Chong, Kefas Lungu, Andrew Johnson, Carter Temm.
 # This file may be used under the terms of the GNU General Public License, version 2 or later, as modified by the NVDA license.
 # For full terms and any additional permissions, see the NVDA license file: https://github.com/nvaccess/nvda/blob/master/copying.txt
 
@@ -1615,20 +1615,21 @@ class AutoSettingsMixin(metaclass=ABCMeta):
 				pass
 
 	def onDiscard(self):
-		# unbind change events for string settings as wx closes combo boxes on cancel
-		settingsInst = self.getSettings()
-		for setting in settingsInst.supportedSettings:
-			if isinstance(setting, (NumericDriverSetting, BooleanDriverSetting)):
-				continue
-			getattr(self, f"{setting.id}List").Unbind(wx.EVT_CHOICE)
+		# unbind change events for string settings as wx closes combo boxes on cancel.
+		# Use the controls that were created, as the settings instance may have changed since (#6469).
+		for settingId in self.sizerDict:
+			if combo := getattr(self, f"{settingId}List", None):
+				combo.Unbind(wx.EVT_CHOICE)
 		# restore settings
-		settingsInst.loadSettings()
+		self.getSettings().loadSettings()
 
 	def onSave(self):
 		self.getSettings().saveSettings()
 
 	def refreshGui(self):
-		if not self._currentSettingsRef():
+		# The previous settings instance may outlive its replacement (e.g. a terminated synth awaiting
+		# garbage collection), so compare identity rather than waiting for the weakref to die (#6469).
+		if self._currentSettingsRef() is not self.getSettings():
 			if gui._isDebug():
 				log.debug("refreshing panel")
 			self.sizerDict.clear()
@@ -1638,6 +1639,7 @@ class AutoSettingsMixin(metaclass=ABCMeta):
 				lambda ref: wx.CallAfter(self.refreshGui),
 			)
 			self.makeSettings(self.settingsSizer)
+			self.settingsSizer.Layout()
 
 	def onPanelActivated(self):
 		"""Called after the panel has been activated
@@ -1877,6 +1879,7 @@ class VoiceSettingsPanel(AutoSettingsMixin, SettingsPanel):
 		self.useSpellingFunctionalityCheckBox.SetValue(
 			config.conf["speech"][self.driver.name]["useSpellingFunctionality"],
 		)
+		self._appendMaxSelectionReportingLength(settingsSizerHelper)
 		self._appendSpeechModesList(settingsSizerHelper)
 
 	def _appendSymbolDictionariesList(self, settingsSizerHelper: guiHelper.BoxSizerHelper) -> None:
@@ -1927,6 +1930,19 @@ class VoiceSettingsPanel(AutoSettingsMixin, SettingsPanel):
 		self.speechModesList.Bind(wx.EVT_CHECKLISTBOX, self._onSpeechModesListChange)
 		self.speechModesList.Select(0)
 
+	def _appendMaxSelectionReportingLength(self, settingsSizerHelper: guiHelper.BoxSizerHelper) -> None:
+		validation = config.conf.getConfigValidation(("speech", "maxSelectionReportingLength"))
+		self.maxSelectionReportingLengthEdit = settingsSizerHelper.addLabeledControl(
+			# Translators: This is the label for an edit box in the voice settings panel.
+			# Longer selections are reported as a number of characters.
+			_("Speak selected &text if it has fewer characters than"),
+			nvdaControls.SelectOnFocusSpinCtrl,
+			min=int(validation.kwargs["min"]),
+			max=int(validation.kwargs["max"]),
+			initial=config.conf["speech"]["maxSelectionReportingLength"],
+		)
+		self.bindHelpEvent("MaxSelectionReportingLength", self.maxSelectionReportingLengthEdit)
+
 	def _appendDelayedCharacterDescriptions(self, settingsSizerHelper: guiHelper.BoxSizerHelper) -> None:
 		# Translators: This is the label for a checkbox in the voice settings panel.
 		delayedCharacterDescriptionsText = _("&Delayed descriptions for characters on cursor movement")
@@ -1976,6 +1992,7 @@ class VoiceSettingsPanel(AutoSettingsMixin, SettingsPanel):
 		]
 		delayedDescriptions = self.delayedCharacterDescriptionsCheckBox.IsChecked()
 		config.conf["speech"]["delayedCharacterDescriptions"] = delayedDescriptions
+		config.conf["speech"]["maxSelectionReportingLength"] = self.maxSelectionReportingLengthEdit.Value
 		config.conf["speech"][self.driver.name]["capPitchChange"] = self.capPitchChangeEdit.Value
 		config.conf["speech"][self.driver.name]["sayCapForCapitals"] = self.sayCapForCapsCheckBox.IsChecked()
 		config.conf["speech"][self.driver.name]["beepForCapitals"] = self.beepForCapsCheckBox.IsChecked()
@@ -2607,8 +2624,8 @@ class BrowseModePanel(SettingsPanel):
 			maxLengthLabelText,
 			nvdaControls.SelectOnFocusSpinCtrl,
 			# min and max are not enforced in the config for virtualBuffers.maxLineLength
-			min=10,
-			max=250,
+			min=0,
+			max=1000,
 			initial=config.conf["virtualBuffers"]["maxLineLength"],
 		)
 		self.bindHelpEvent("BrowseModeSettingsMaxLength", self.maxLengthEdit)
@@ -6882,6 +6899,8 @@ class SpeechSymbolsDialog(SettingsDialog):
 		# See the "Punctuation/Symbol Pronunciation" section of the User Guide for details.
 		self.symbolsList.AppendColumn(_("Preserve"))
 		self.symbolsList.Bind(wx.EVT_LIST_ITEM_FOCUSED, self.onListItemFocused)
+		self.symbolsList.Bind(wx.EVT_CONTEXT_MENU, self.onContextMenu)
+		self.symbolsList.Bind(wx.EVT_CHAR_HOOK, self.onCharHook)
 
 		# Translators: The label for the group of controls in symbol pronunciation dialog to change the pronunciation of a symbol.
 		changeSymbolText = _("Change selected symbol")
@@ -7090,6 +7109,30 @@ class SpeechSymbolsDialog(SettingsDialog):
 			# We don't get a new focus event with the new index.
 			self.symbolsList.sendListItemFocusedEvent(index)
 		self.symbolsList.SetFocus()
+
+	def onCharHook(self, evt: wx.KeyEvent):
+		key = evt.GetKeyCode()
+		# Get the selected symbol, if there is one.
+		index = self.symbolsList.GetFirstSelected()
+		if index >= 0:
+			symbol = self.filteredSymbols[index]
+			if key == wx.WXK_DELETE and not self.symbolProcessor.isBuiltin(symbol.identifier):
+				self.OnRemoveClick(None)
+		evt.Skip()
+
+	def onContextMenu(self, evt: wx.ContextMenuEvent):
+		# Get the selected symbol, if there is one.
+		index = self.symbolsList.GetFirstSelected()
+		menu = wx.Menu()
+		if index >= 0:
+			symbol = self.filteredSymbols[index]
+			# Built-in symbols can't be removed.
+			if not self.symbolProcessor.isBuiltin(symbol.identifier):
+				# Translators: Context menu item label to remove a symbol
+				removeItem = menu.Append(wx.ID_ANY, _("Re&move"))
+				self.Bind(wx.EVT_MENU, self.OnRemoveClick, removeItem)
+		self.PopupMenu(menu)
+		menu.Destroy()
 
 	def onOk(self, evt):
 		self.onSymbolEdited()
