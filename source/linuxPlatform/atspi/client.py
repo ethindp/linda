@@ -2,8 +2,10 @@
 
 Everything above this module asks for facts about a Node and never touches libatspi. A Node is an
 accessible's identity, (unique bus name, object path), with a reference this client uses to reach it.
-This client answers each question with libatspi through PyGObject, one D-Bus round trip at a time;
-the engine's mirror can stand behind the same calls later and answer most of them from memory.
+This client answers each question with libatspi through PyGObject. libatspi answers roles, names,
+descriptions, parents and interfaces it has read before from its cache, which the events it
+listens for keep current (see CACHE_MASK); everything else is one D-Bus round trip at a time. The
+engine's mirror can stand behind the same calls later and answer more of them from memory.
 
 Every round trip goes through call, which keeps an application that stops answering from stalling NVDA
 more than once: libatspi waits for an answer on NVDA's main thread, and a property read that times out
@@ -197,6 +199,73 @@ def forgetApplications() -> None:
 
 _toolkits: dict[str, str] = {}
 
+#: What libatspi may answer from memory once it has read it, each kept current by the PropertyChange
+#: events libatspi always listens for. Applications built on atk-bridge send an event only if some
+#: client registered for it, so CACHE_EVENT_TYPES must be among the events listened to.
+#: States are left out: toolkits do not announce every change of them, Firefox's frame losing and
+#: regaining active as a dialog over it closes, and a background tab's document leaving showing, among
+#: them, and NVDA decides which window is active and which page is in front by reading them. Children
+#: are left out too: libatspi learns them only from the application's cache, and keeps them only
+#: through children-changed, which NVDA does not ask for, as a page sends thousands while it loads.
+CACHE_MASK = (
+	Atspi.Cache.NAME
+	| Atspi.Cache.DESCRIPTION
+	| Atspi.Cache.ROLE
+	| Atspi.Cache.PARENT
+	| Atspi.Cache.INTERFACES
+)
+#: The events that keep CACHE_MASK's facts current, besides those NVDA presents.
+CACHE_EVENT_TYPES = ("object:property-change:accessible-parent",)
+
+
+def _enableCache() -> bool:
+	"""Have libatspi answer from what it already knows, as it does under atspi_event_main.
+
+	Without it, libatspi keeps what it reads and the events that change it, and still asks the
+	application every time: every role and name NVDA reads is a round trip. NVDA runs wx's
+	main loop rather than libatspi's, which is what keeps libatspi from trusting its cache, and setting
+	a cache mask is libatspi's own way of saying the client keeps its events flowing. The mask is set
+	on the desktop, whose mask every application without its own uses.
+
+	It is off unless LINDA_ATSPI_CACHE=1: with it on, NVDA's start stalls after the mouse handler, in
+	the rig's sessions, until that is found and fixed.
+	"""
+	import os
+
+	if os.environ.get("LINDA_ATSPI_CACHE", "0") != "1":
+		return False
+	desktop = Atspi.get_desktop(0)
+	if desktop is None:
+		return False
+	try:
+		Atspi.Accessible.set_cache_mask(desktop, CACHE_MASK)
+	except (TypeError, GLib.Error):
+		return False
+	return True
+
+
+#: Applications whose own cache mask is set, by bus name.
+_masked: set[str] = set()
+
+
+def _maskApplication(app, busName: str) -> None:
+	"""Give app CACHE_MASK as its own. libatspi uses the desktop's only for an application whose root it
+	has seen as the desktop's child, and otherwise its default, which keeps children too."""
+	try:
+		root = app.root
+	except AttributeError:
+		root = None
+	if root is None:
+		# Asked again for the next node of this application, by when libatspi may know its root.
+		return
+	_masked.add(busName)
+	if len(_masked) > 4096:
+		_masked.clear()
+	try:
+		Atspi.Accessible.set_cache_mask(root, CACHE_MASK)
+	except (TypeError, GLib.Error):
+		pass
+
 
 class Client:
 	"""Questions about nodes, each one round trip to the application in this implementation."""
@@ -204,6 +273,8 @@ class Client:
 	def __init__(self) -> None:
 		global _hasNoBus
 		self._listener = None
+		#: Whether libatspi answers from its cache; never without a bus.
+		self.caching = False
 		if Atspi.init() == _INIT_NO_BUS:
 			from logHandler import log
 
@@ -211,6 +282,7 @@ class Client:
 			_hasNoBus = True
 			return
 		Atspi.set_timeout(TIMEOUT_MS, TIMEOUT_MS)
+		self.caching = _enableCache()
 
 	@property
 	def hasBus(self) -> bool:
@@ -222,9 +294,14 @@ class Client:
 		if acc is None:
 			return None
 		try:
-			return Node(acc.app.bus_name if acc.app else "", acc.path, acc)
+			app = acc.app
+			busName = app.bus_name if app else ""
+			node = Node(busName, acc.path, acc)
 		except AttributeError:
 			return None
+		if self.caching and busName not in _masked:
+			_maskApplication(app, busName)
+		return node
 
 	def desktop(self) -> Node:
 		if _hasNoBus:

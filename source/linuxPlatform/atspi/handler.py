@@ -42,6 +42,8 @@ EVENT_TYPES = [
 	"window:activate",
 	"window:deactivate",
 	"window:create",
+	# Only so that applications send what keeps libatspi's cache current; dropped as it arrives.
+	*_clientModule.CACHE_EVENT_TYPES,
 ]
 WINDOW_ACTIVATION_EVENTS = frozenset({"window:activate", "window:deactivate"})
 #: What Qt's QAccessibleAnnouncementEvent and GTK 4's gtk_accessible_announce send: a message for the
@@ -478,7 +480,7 @@ def _isPasswordText(node: Node) -> bool:
 def _onEvent(eventType: str, source: Node | None, detail1: int, detail2: int, anyData) -> None:
 	# Runs inside wx.Yield in the middle of whatever NVDA was doing: append and ask for a pump, nothing
 	# more.
-	if source is None or _exiting:
+	if source is None or _exiting or eventType in _clientModule.CACHE_EVENT_TYPES:
 		return
 	import core
 
