@@ -172,6 +172,25 @@ pub fn string_property(msg: &Message) -> zbus::Result<String> {
         .ok_or(zbus::Error::IncorrectType)
 }
 
+/// The name and description from the reply of `Properties.GetAll` on the
+/// Accessible interface, `(a{sv})`, which gives both in one round trip where
+/// two `Properties.Get` would take two. A property the reply lacks is empty,
+/// as AT-SPI gives an object with none; a reply that holds neither is an
+/// error, as from a bridge that answers GetAll with nothing.
+pub fn name_and_description(msg: &Message) -> zbus::Result<(String, String)> {
+    let body = msg.body();
+    let props: HashMap<&str, Variant<'_>> = body.deserialize()?;
+    let name = props.get("Name").and_then(variant_str);
+    let description = props.get("Description").and_then(variant_str);
+    if name.is_none() && description.is_none() {
+        return Err(zbus::Error::IncorrectType);
+    }
+    Ok((
+        name.unwrap_or_default().to_owned(),
+        description.unwrap_or_default().to_owned(),
+    ))
+}
+
 fn variant_str<'a>(v: &'a Variant<'_>) -> Option<&'a str> {
     match v {
         Variant::Str(s) => Some(s.as_str()),
@@ -480,6 +499,26 @@ mod tests {
             "Heading 1"
         );
         assert!(string_property(&body_message(&Variant::new(3i32))).is_err());
+    }
+
+    #[test]
+    fn decodes_name_and_description_from_get_all() {
+        let mut props: HashMap<&str, Variant<'_>> = HashMap::new();
+        props.insert("Name", Variant::new("Search"));
+        props.insert("Description", Variant::new("Find on the site"));
+        props.insert("ChildCount", Variant::new(2i32));
+        assert_eq!(
+            name_and_description(&body_message(&props)).unwrap(),
+            ("Search".to_owned(), "Find on the site".to_owned())
+        );
+        let mut only_name: HashMap<&str, Variant<'_>> = HashMap::new();
+        only_name.insert("Name", Variant::new("Search"));
+        assert_eq!(
+            name_and_description(&body_message(&only_name)).unwrap(),
+            ("Search".to_owned(), String::new())
+        );
+        let empty: HashMap<&str, Variant<'_>> = HashMap::new();
+        assert!(name_and_description(&body_message(&empty)).is_err());
     }
 
     #[test]

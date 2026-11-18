@@ -87,6 +87,9 @@ pub enum Field {
     /// A whole subtree in one Collection.GetTree: structure, names, descriptions, attributes and
     /// the interfaces its properties show, leaving roles, states and text to ask for each object.
     Tree,
+    /// Name and Description in one Properties.GetAll, where two Properties.Get would take two round
+    /// trips. A bridge that refuses GetAll is asked for each with Get instead.
+    Props,
 }
 
 /// Objects below which a subtree comes in one GetTree. A GetTree holds Firefox's main thread for
@@ -144,7 +147,17 @@ fn match_all() -> MatchAll {
     )
 }
 
-const BASE: [Field; 7] = [
+/// What is asked of each object walked one at a time.
+const BASE: [Field; 6] = [
+    Field::Children,
+    Field::Role,
+    Field::States,
+    Field::Props,
+    Field::Interfaces,
+    Field::Attributes,
+];
+/// BASE for a bridge that refuses Properties.GetAll.
+const BASE_WITHOUT_GET_ALL: [Field; 7] = [
     Field::Children,
     Field::Role,
     Field::States,
@@ -158,8 +171,9 @@ fn bit(f: Field) -> u32 {
     1 << f as u32
 }
 
+/// What an object needs before it is complete, however it was asked for.
 fn base_bits() -> u32 {
-    BASE.iter().fold(0, |a, f| a | bit(*f))
+    BASE_WITHOUT_GET_ALL.iter().fold(0, |a, f| a | bit(*f))
 }
 
 /// What the renderer and the watcher know of one object.
@@ -306,6 +320,8 @@ pub struct Walk {
     starts: HashSet<String>,
     /// Fetch small subtrees whole rather than object by object.
     subtrees: bool,
+    /// The application refused Properties.GetAll, so names and descriptions are asked one by one.
+    no_get_all: bool,
 }
 
 impl Walk {
@@ -341,6 +357,16 @@ impl Walk {
             started: Instant::now(),
             starts: HashSet::new(),
             subtrees: false,
+            no_get_all: false,
+        }
+    }
+
+    /// What to ask of an object walked one at a time.
+    fn base(&self) -> &'static [Field] {
+        if self.no_get_all {
+            &BASE_WITHOUT_GET_ALL
+        } else {
+            &BASE
         }
     }
 
@@ -361,12 +387,17 @@ impl Walk {
         let o = self.objs.entry(path.to_owned()).or_default();
         o.parent = parent;
         o.key = key;
-        for f in BASE {
+        for &f in self.base() {
             self.queue(path, f);
         }
     }
 
     fn queue(&mut self, path: &str, f: Field) {
+        self.queue_at(path, f, false);
+    }
+
+    /// Queues a call, in document order, or after every call in document order when `last`.
+    fn queue_at(&mut self, path: &str, f: Field, last: bool) {
         let Some(o) = self.objs.get_mut(path) else {
             return;
         };
@@ -374,7 +405,16 @@ impl Walk {
             return;
         }
         o.queued |= bit(f);
-        let entry = Reverse((o.key.clone(), f, path.to_owned()));
+        let key = if last {
+            // Keys are positions in the tree, so one led by u32::MAX sorts after every real one.
+            let mut k = Vec::with_capacity(o.key.len() + 1);
+            k.push(u32::MAX);
+            k.extend_from_slice(&o.key);
+            k
+        } else {
+            o.key.clone()
+        };
+        let entry = Reverse((key, f, path.to_owned()));
         if matches!(f, Field::Size | Field::Tree) {
             self.heavy.push(entry);
         } else {
@@ -477,11 +517,13 @@ impl Walk {
                 if is_timeout(&e) {
                     self.timeouts += 1;
                     if self.retried.insert((path.clone(), f)) {
-                        // Asked again at the back of the queue, once.
+                        // Asked again at the back of the queue, once: the heaps are ordered by
+                        // position, where it would come straight back while the application is
+                        // still busy.
                         if let Some(o) = self.objs.get_mut(&path) {
                             o.queued &= !bit(f);
                         }
-                        self.queue(&path, f);
+                        self.queue_at(&path, f, true);
                         return;
                     }
                 }
@@ -492,6 +534,9 @@ impl Walk {
                     if self.starts.contains(&path) && !self.gone.contains(&path) {
                         self.gone.push(path.clone());
                     }
+                } else if f == Field::Props && !is_timeout(&e) {
+                    self.without_get_all(&path);
+                    return;
                 }
                 self.finish(&path, f);
                 return;
@@ -500,10 +545,25 @@ impl Walk {
         if f == Field::Children {
             self.children(&path, &msg);
         } else if let Some(o) = self.objs.get_mut(&path) {
-            let _ = decode_into(o, f, &msg);
+            if decode_into(o, f, &msg).is_err() && f == Field::Props {
+                self.without_get_all(&path);
+                return;
+            }
         }
         self.finish(&path, f);
         self.followups(&path);
+    }
+
+    /// The application answered Properties.GetAll with an error or with neither property: ask this
+    /// object, and every object after it in this walk, for its name and description one at a time.
+    fn without_get_all(&mut self, path: &str) {
+        self.no_get_all = true;
+        if let Some(o) = self.objs.get_mut(path) {
+            // Props is settled without giving the two properties it stands for.
+            o.done |= bit(Field::Props);
+        }
+        self.queue(path, Field::Name);
+        self.queue(path, Field::Description);
     }
 
     fn finish(&mut self, path: &str, f: Field) {
@@ -512,6 +572,10 @@ impl Walk {
         };
         let was = o.complete();
         o.done |= bit(f);
+        if f == Field::Props {
+            // GetAll gave both, or the object is gone and neither will come.
+            o.done |= bit(Field::Name) | bit(Field::Description);
+        }
         if !was && o.complete() {
             self.complete += 1;
         }
@@ -614,7 +678,7 @@ impl Walk {
                 if let Some(o) = self.objs.get_mut(&w) {
                     o.awaiting_tree = false;
                 }
-                for f in BASE {
+                for &f in self.base() {
                     self.queue(&w, f);
                 }
             }
@@ -876,6 +940,11 @@ fn issue(client: Rc<Client>, id: u64, path: String, f: Field) -> LocalBoxFuture<
                     )
                     .await
             }
+            Field::Props => {
+                client
+                    .call(p, IFACE_PROPERTIES, "GetAll", &(IFACE_ACCESSIBLE,))
+                    .await
+            }
             Field::Interfaces => client.call(p, IFACE_ACCESSIBLE, "GetInterfaces", &()).await,
             Field::Attributes => client.call(p, IFACE_ACCESSIBLE, "GetAttributes", &()).await,
             Field::Text => client.call(p, IFACE_TEXT, "GetText", &(0i32, -1i32)).await,
@@ -1004,6 +1073,7 @@ fn decode_into(o: &mut Obj, f: Field, msg: &Message) -> zbus::Result<()> {
         Field::States => o.states = decode::states(msg)?,
         Field::Name => o.name = decode::string_property(msg)?,
         Field::Description => o.description = decode::string_property(msg)?,
+        Field::Props => (o.name, o.description) = decode::name_and_description(msg)?,
         Field::Interfaces => o.interfaces = decode::interfaces(msg)?,
         Field::Attributes => o.attributes = decode::attributes(msg)?,
         Field::Text => o.text = Some(decode::string(msg)?),
