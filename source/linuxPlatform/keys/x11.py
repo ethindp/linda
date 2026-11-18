@@ -1382,6 +1382,8 @@ class X11KeySource:
 		would; the root when no window may be grabbed on."""
 		self._keysWindow = window
 		catchers = []
+		# Filled apart and published whole: the decider thread reads the grabs while this one makes them.
+		grabbed = dict(self._grabbed)
 		for keycode, modifiers, label in self._keysWanted():
 			catcher = error.CatchError(error.BadAccess, error.BadWindow)
 			for mod in modifiers or [X.AnyModifier]:
@@ -1400,7 +1402,8 @@ class X11KeySource:
 				for mod in modifiers or [X.AnyModifier]:
 					window.ungrab_key(keycode, mod, onerror=error.CatchError(error.BadWindow))
 			else:
-				self._grabbed[keycode] = modifiers
+				grabbed[keycode] = modifiers
+		self._grabbed = grabbed
 		for label in refused:
 			log.warning(
 				f"NVDA could not take the {label}, which another program holds; "
@@ -1426,8 +1429,12 @@ class X11KeySource:
 		"""Key code: the modifier masks, without the locks, it is captured with in mode."""
 		if mode == "off" or self._translator is None:
 			return {}
-		if mode in self._modeSets:
-			return self._modeSets[mode]
+		# Both threads ask; the X thread replaces these when the grabs or gestures change. A set worked
+		# out from the old ones goes into the old cache, never the new.
+		modeSets = self._modeSets
+		grabbedNow = self._grabbed
+		if mode in modeSets:
+			return modeSets[mode]
 		masks = {"": 0, "shift": X.ShiftMask, "control": X.ControlMask, "alt": X.Mod1Mask}
 		levelThree = self._translator.levelThreeMask()
 		if levelThree:
@@ -1457,10 +1464,10 @@ class X11KeySource:
 			keycode = self._translator.keycodeFor(vk, extended)
 			if keycode is not None and names <= GESTURE_MASKS.keys():
 				wanted.setdefault(keycode, set()).add(sum(GESTURE_MASKS[name] for name in names))
-		for keycode in self._grabbed:
+		for keycode in grabbedNow:
 			# The NVDA keys' own grabs, on the same window, would be taken over.
 			wanted.pop(keycode, None)
-		self._modeSets[mode] = wanted
+		modeSets[mode] = wanted
 		return wanted
 
 	def _grabSet(self) -> dict[int, set[int]]:
