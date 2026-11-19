@@ -195,7 +195,7 @@ class WavePlayer(garbageHandler.TrackedObject):
 	#: Maps C++ WasapiPlayer instances to Python WasapiWavePlayer instances.
 	#: This allows us to have a single callback in the class rather than on
 	#: each instance, which prevents reference cycles.
-	_instances = weakref.WeakValueDictionary()
+	_instances: typing.ClassVar[weakref.WeakValueDictionary] = weakref.WeakValueDictionary()
 	#: How long (in seconds) to wait before indicating that an audio stream that
 	#: hasn't played is idle.
 	_IDLE_TIMEOUT: int = 10

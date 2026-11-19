@@ -227,9 +227,8 @@ class BrailleDisplayDriver(braille.display.driver.BrailleDisplayDriver):
 				# I/O buffers reset failed, retried again in L{_openPort}
 				if not initState:
 					continue
-			elif not self._dev.is_open:
-				if not self._openPort(i):
-					continue
+			elif not self._dev.is_open and not self._openPort(i):
+				continue
 			if self._tryToConnect:
 				self._tryToConnect = False
 			else:

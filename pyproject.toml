@@ -127,6 +127,9 @@ extend-unsafe-fixes = [
 	"I001",
 ]
 logger-objects = ["logHandler.log"]
+# Rules that ruff 0.17 no longer enables by default but 0.16, which this tree pins, does: their noqa
+# comments are kept, rather than reported as unused, under either.
+external = ["DTZ"]
 
 [tool.ruff.lint.per-file-ignores]
 # sconscripts contains many inbuilt functions not recognised by the lint,

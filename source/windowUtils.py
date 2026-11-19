@@ -23,7 +23,7 @@ from logHandler import log
 from abc import abstractmethod
 from baseObject import AutoPropertyObject
 from collections.abc import Iterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 from winBindings import user32
 
 if TYPE_CHECKING:
@@ -280,7 +280,7 @@ class CustomWindow(AutoPropertyObject):
 		"""The class name of this window."""
 		return None
 
-	_hwndsToInstances = weakref.WeakValueDictionary()
+	_hwndsToInstances: ClassVar[weakref.WeakValueDictionary] = weakref.WeakValueDictionary()
 
 	def __init__(
 		self,

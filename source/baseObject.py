@@ -7,6 +7,7 @@
 
 from typing import (  # noqa: I001
 	Any,
+	ClassVar,
 	Union,
 )
 from collections.abc import Callable
@@ -137,7 +138,7 @@ class AutoPropertyObject(garbageHandler.TrackedObject, metaclass=AutoPropertyTyp
 
 	#: Tracks the instances of this class; used by L{invalidateCaches}.
 	#: @type: weakref.WeakKeyDictionary
-	__instances = weakref.WeakKeyDictionary()
+	__instances: ClassVar[weakref.WeakKeyDictionary] = weakref.WeakKeyDictionary()
 	#: Specifies whether properties are cached by default;
 	#: can be overridden for individual properties by setting _cache_propertyName.
 	#: @type: bool

@@ -5,6 +5,7 @@
 
 import weakref  # noqa: I001
 import sys
+from typing import ClassVar
 import wx
 
 import config
@@ -41,7 +42,7 @@ class WelcomeDialog(
 		"Press NVDA+n at any time to activate the NVDA menu.\n"
 		"From this menu, you can configure NVDA, get help, and access other NVDA functions.",
 	)
-	_instances: set["WelcomeDialog"] = weakref.WeakSet()
+	_instances: ClassVar[weakref.WeakSet["WelcomeDialog"]] = weakref.WeakSet()
 
 	def __init__(self, parent):
 		# Translators: The title of the Welcome dialog when user starts NVDA for the first time.

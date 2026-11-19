@@ -109,6 +109,11 @@
 CODE_OF_CONDUCT.md
   repository: deleted. It has NV Access's staff enforce it and receive
   the reports, which they do not do for Linda
+pyproject.toml
+  repository: lists DTZ as external for ruff, as ruff 0.17 no longer
+  enables flake8-datetimez by default and reports this tree's noqa
+  comments for it as unused; ruff 0.16, which this tree pins, still
+  enforces it
 readme.md
   repository: rewritten for Linda: what it is, what it needs and how to
   set it up on each distribution
@@ -284,6 +289,9 @@ source/appModules/chromium.py
   Chromium builds a page's accessible tree, names a page's landmarks for
   their kind and reads a rich text editor's paragraphs as one text; on
   Windows, where Chromium is chrome.exe, it is the default
+source/appModules/devenv.py
+  every platform: folds the nested if into its elif, which ruff 0.17
+  asks for; the branch is taken exactly when it was
 source/appModules/discord.py
   Linux runtime: added. Discord's app module is Chromium's; on Windows,
   where Discord.exe would load it, it is the default
@@ -352,6 +360,10 @@ source/audioDucking.py
   Linux, which would need a ducking policy in the sound server's session
   manager. It answers before the Windows checks, which on Linux would ask
   isInstalledCopy and hasUiAccess, neither of which knows the sound server
+source/baseObject.py
+  every platform: annotates AutoPropertyObject's instances as a
+  ClassVar, which ruff 0.17 asks of a mutable class attribute; nothing
+  runs differently
 source/braille/brailleHandler.py
   Linux runtime: the display acknowledgement timer is a
   linuxPlatform.ioThread.WaitableTimer, since Linux has no waitable timer
@@ -359,6 +371,9 @@ source/braille/brailleHandler.py
 source/braille/display/driver.py
   Linux runtime: an acknowledgement from the display cancels the Linux
   timer object rather than calling CancelWaitableTimer
+source/brailleDisplayDrivers/albatross/driver.py
+  every platform: folds the nested if into its elif, which ruff 0.17
+  asks for; the branch is taken exactly when it was
 source/brailleDisplayDrivers/brltty.py
   Linux runtime: BRLTTY is found by its BrlAPI socket rather than by
   named pipes, and supports automatic detection through a device scanner
@@ -370,6 +385,10 @@ source/brailleDisplayDrivers/brltty.py
   check timer is started on the main thread, and a lost connection
   gives way to Automatic or no braille once, with a warning rather than
   an error on every key check
+source/brailleDisplayDrivers/handyTech.py
+  every platform: annotates BrailleDisplayDriver._instances as a
+  ClassVar, which ruff 0.17 asks of a mutable class attribute; nothing
+  runs differently
 source/brailleViewer/__init__.py
   every platform: createBrailleViewerTool unregisters its display
   dimensions filter and reports the viewer as not created when the
@@ -564,6 +583,9 @@ source/gui/contextHelp.py
   file:/// before an absolute POSIX path gives four slashes. The redirect
   stays, because xdg-open hands a file URL to GIO, which refuses one with a
   fragment
+source/gui/exit.py
+  every platform: folds the nested if into its elif, which ruff 0.17
+  asks for; the branch is taken exactly when it was
 source/gui/inputGestures.py
   every platform: carries NVDA master's commits aa34ce557 (#20890),
   ea1f2e38a (#21058), ahead of the release that brings them; drop this once
@@ -615,11 +637,22 @@ source/gui/settingsDialogs.py
   every platform: carries NVDA master's commits 25e8f0221 (#21105),
   8ad96335c (#20910), d9b0488d9 (#20997), e1eef75ed (#21104), ahead of the
   release that brings them; drop this once that release is merged
+  every platform: annotates SettingsDialog._instances as a ClassVar,
+  which ruff 0.17 asks of a mutable class attribute; nothing runs
+  differently
 source/gui/startupDialogs.py
   Linux runtime: the welcome dialog's "Start NVDA after I sign in" is
   enabled outside secure mode, installed copy or not, as an XDG autostart
   entry can start any copy; easeOfAccess tells the user when this copy has
   no command that would last
+  every platform: annotates WelcomeDialog._instances as a ClassVar,
+  which ruff 0.17 asks of a mutable class attribute; nothing runs
+  differently
+source/hidpi.py
+  every platform: annotates the two unions' _fields_ as ClassVar in
+  place of their noqa comments, which ruff 0.17 reports as unused while
+  ruff 0.16, which this tree pins, still needs them; ctypes builds the
+  unions as before
 source/hwIo/__init__.py
   Linux runtime: the background I/O thread is linuxPlatform.ioThread's
   subclass of upstream's, which waits on a condition rather than in an
@@ -733,6 +766,8 @@ source/nvwave.py
   copy of fileWavePlayer read once per pass, before upstream's loop, which
   reads the global twice; the previous file's thread can set it to None in
   between, and the AttributeError that follows loses the new file
+  every platform: annotates WavePlayer._instances as a ClassVar, which
+  ruff 0.17 asks of a mutable class attribute; nothing runs differently
 source/oleacc.py
   import safety: on Linux the oleacc type library's names come from the
   comInterfaces.Accessibility stand-in, since comtypes.client.GetModule
@@ -870,6 +905,10 @@ source/utils/security.py
   below the locker. Upstream's Win32 z-order checks would raise there, and
   objectBelowLockScreenAndWindowsIsLocked takes any exception to mean the
   object is safe to present
+source/virtualBuffers/__init__.py
+  every platform: annotates VirtualBuffer.rootIdentifiers as a ClassVar,
+  which ruff 0.17 asks of a mutable class attribute; nothing runs
+  differently
 source/visionEnhancementProviders/NVDAHighlighter.py
   Linux runtime: NVDAHighlighter is a subclass that puts
   linuxPlatform.visualHighlight's XHighlighter before upstream's class,
@@ -925,6 +964,9 @@ source/windowUtils.py
   pixels that GTK scales for the display itself; every message box and settings
   panel asks for it, and the dialogs that scale their sizes through
   gui.dpiScalingHelper would otherwise fail on GetDC
+  every platform: annotates CustomWindow._hwndsToInstances as a
+  ClassVar, which ruff 0.17 asks of a mutable class attribute; nothing
+  runs differently
 tests/unit/__init__.py
   Linux runtime: linuxPlatform.bootstrap.install() runs first; the
   comtypes monkey patches and the load of nvdaHelperLocal.dll run only on

@@ -67,9 +67,12 @@ class AppModule(appModuleHandler.AppModule):
 			except ValueError:
 				pass
 			clsList[0:0] = [VsTextEditPane, EditableTextWithoutAutoSelectDetection]
-		elif (self.vsMajor == 15 and self.vsMinor >= 3) or self.vsMajor >= 16:
-			if obj.role == controlTypes.Role.TREEVIEWITEM and obj.windowClassName == "LiteTreeView32":
-				clsList.insert(0, ObjectsTreeItem)
+		elif (
+			((self.vsMajor == 15 and self.vsMinor >= 3) or self.vsMajor >= 16)
+			and obj.role == controlTypes.Role.TREEVIEWITEM
+			and obj.windowClassName == "LiteTreeView32"
+		):
+			clsList.insert(0, ObjectsTreeItem)
 
 	def _getDTE(self):
 		# Retrieve the top level automation object for the IDE

@@ -161,33 +161,32 @@ class ExitDialog(wx.Dialog):
 			)
 		elif action == _ExitAction.RESTART_WITH_DEBUG_LOGGING_ENABLED:
 			queueHandler.queueFunction(queueHandler.eventQueue, core.restart, debugLogging=True)
-		elif action == _ExitAction.INSTALL_PENDING_UPDATE:
-			if updateCheck:
-				from _remoteClient import _remoteClient
+		elif action == _ExitAction.INSTALL_PENDING_UPDATE and updateCheck:
+			from _remoteClient import _remoteClient
 
-				if (
-					_remoteClient is not None
-					and _remoteClient.isConnectedAsFollower
-					and not updateCheck._warnAndConfirmIfUpdatingRemotely()
-				):
-					return
-				destPath, version, apiVersion, backCompatTo = updateCheck.getPendingUpdate()
-				from addonHandler import getIncompatibleAddons  # noqa: I001
-				from gui import mainFrame
+			if (
+				_remoteClient is not None
+				and _remoteClient.isConnectedAsFollower
+				and not updateCheck._warnAndConfirmIfUpdatingRemotely()
+			):
+				return
+			destPath, version, apiVersion, backCompatTo = updateCheck.getPendingUpdate()
+			from addonHandler import getIncompatibleAddons  # noqa: I001
+			from gui import mainFrame
 
-				if any(
-					getIncompatibleAddons(currentAPIVersion=apiVersion, backCompatToAPIVersion=backCompatTo),
-				):
-					confirmUpdateDialog = updateCheck.UpdateAskInstallDialog(
-						parent=mainFrame,
-						destPath=destPath,
-						version=version,
-						apiVersion=apiVersion,
-						backCompatTo=backCompatTo,
-					)
-					confirmUpdateDialog.callback(displayDialogAsModal(confirmUpdateDialog))
-				else:
-					updateCheck.executePendingUpdate()
+			if any(
+				getIncompatibleAddons(currentAPIVersion=apiVersion, backCompatToAPIVersion=backCompatTo),
+			):
+				confirmUpdateDialog = updateCheck.UpdateAskInstallDialog(
+					parent=mainFrame,
+					destPath=destPath,
+					version=version,
+					apiVersion=apiVersion,
+					backCompatTo=backCompatTo,
+				)
+				confirmUpdateDialog.callback(displayDialogAsModal(confirmUpdateDialog))
+			else:
+				updateCheck.executePendingUpdate()
 		wx.CallAfter(self.Destroy)
 
 	def onCancel(self, evt):

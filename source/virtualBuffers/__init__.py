@@ -7,6 +7,7 @@ import time  # noqa: I001
 import threading
 import ctypes
 from typing import (  # noqa: UP035
+	ClassVar,
 	Optional,  # noqa: F401
 	Dict,  # noqa: F401
 )
@@ -517,7 +518,7 @@ class VirtualBuffer(browseMode.BrowseModeDocumentTreeInterceptor):
 	_focusEventMustUpdateCaretPosition = True
 
 	#: Maps root identifiers (docHandle and ID) to buffers.
-	rootIdentifiers = weakref.WeakValueDictionary()
+	rootIdentifiers: ClassVar[weakref.WeakValueDictionary] = weakref.WeakValueDictionary()
 
 	def __init__(self, rootNVDAObject, backendName=None):
 		super().__init__(rootNVDAObject)

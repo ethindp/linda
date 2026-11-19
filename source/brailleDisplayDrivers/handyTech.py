@@ -28,6 +28,7 @@ from logHandler import log
 import bdDetect
 import time
 import datetime
+from typing import ClassVar
 from winBindings import user32
 import windowUtils
 
@@ -784,7 +785,7 @@ class BrailleDisplayDriver(braille.display.driver.BrailleDisplayDriver, Scriptab
 	timeout = 0.2
 	_sleepcounter = 0
 	_messageWindow = None
-	_instances = weakref.WeakSet()
+	_instances: ClassVar[weakref.WeakSet] = weakref.WeakSet()
 
 	@classmethod
 	def registerAutomaticDetection(cls, driverRegistrar: bdDetect.DriverRegistrar):

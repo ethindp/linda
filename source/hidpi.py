@@ -10,6 +10,7 @@ Required types and defines from Windows SDK's hidpi.h
 
 import enum  # noqa: I001
 from ctypes import Structure, Union, c_byte, c_long
+from typing import ClassVar
 from ctypes.wintypes import USHORT, BOOLEAN, ULONG, LONG
 
 
@@ -65,7 +66,7 @@ class HIDP_REPORT_TYPE(enum.IntEnum):
 
 
 class _HIDP_DATA_U1(Union):
-	_fields_ = [  # noqa: RUF012
+	_fields_: ClassVar[list] = [
 		("RawValue", ULONG),
 		("On", BOOLEAN),
 	]
@@ -106,7 +107,7 @@ class _HIDP_VALUE_AND_BUTTON_CAPS_U1_NOT_RANGE(Structure):
 
 
 class _HIDP_VALUE_AND_BUTTON_CAPS_U1(Union):
-	_fields_ = [  # noqa: RUF012
+	_fields_: ClassVar[list] = [
 		("Range", _HIDP_VALUE_AND_BUTTON_CAPS_U1_RANGE),
 		("NotRange", _HIDP_VALUE_AND_BUTTON_CAPS_U1_NOT_RANGE),
 	]

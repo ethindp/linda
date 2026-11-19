@@ -21,6 +21,7 @@ from enum import IntEnum
 from locale import strxfrm
 from typing import (
 	Any,
+	ClassVar,
 )
 
 import audio
@@ -172,7 +173,7 @@ class SettingsDialog(
 		DESTROYED = 1
 
 	# holds instances of SettingsDialogs as keys, and state as the value
-	_instances = weakref.WeakKeyDictionary()
+	_instances: ClassVar[weakref.WeakKeyDictionary] = weakref.WeakKeyDictionary()
 	title = ""
 	helpId = "NVDASettings"
 	shouldSuspendConfigProfileTriggers = True
