@@ -348,6 +348,7 @@ def runHazard(name: str) -> dict:
 				f.write("")
 		sys.path.insert(0, shadowDir)
 		import comtypes.gen
+
 		import NVDAHelper
 
 		paths = {"NVDAHelper": list(NVDAHelper.__path__), "comtypes.gen": list(comtypes.gen.__path__)}
